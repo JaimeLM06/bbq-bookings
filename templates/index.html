@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Organizador de reservas de barbacoa</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Operación del restaurante</p>
+          <h1>Reservas de barbacoa</h1>
+        </div>
+        <button id="newBookingButton" class="primary-button">Nueva reserva</button>
+      </header>
+
+      <section class="toolbar">
+        <label for="bookingDate">Fecha</label>
+        <input id="bookingDate" type="date" />
+      </section>
+
+      <main id="schedule" class="schedule" aria-live="polite"></main>
+    </div>
+
+    <dialog id="bookingDialog" class="booking-dialog">
+      <form method="dialog" id="bookingForm" class="booking-form">
+        <div class="dialog-header">
+          <h2 id="dialogTitle">Nueva reserva</h2>
+          <button type="button" id="closeDialogButton" class="close-button" aria-label="Cerrar">×</button>
+        </div>
+
+        <div class="field-grid">
+          <label>
+            <span>Nombre de la persona</span>
+            <input id="nameInput" name="name" type="text" placeholder="Nombre completo" required />
+          </label>
+
+          <label>
+            <span>Fecha</span>
+            <input id="dateInput" name="date" type="date" required />
+          </label>
+
+          <label>
+            <span>Turno</span>
+            <select id="shiftInput" name="shift" required>
+              <option value="morning">Mañana</option>
+              <option value="afternoon">Tarde</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Barbacoa</span>
+            <select id="slotInput" name="slot" required>
+              <option value="bbp-1">bbp 1</option>
+              <option value="bbp-2">bbp 2</option>
+              <option value="bbm-1">bbm 1</option>
+              <option value="bbm-2">bbm 2</option>
+              <option value="bbg-1">bbg 1</option>
+              <option value="bbg-2">bbg 2</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Hora</span>
+            <select id="timeInput" name="time" required></select>
+          </label>
+
+          <label>
+            <span>Personas</span>
+            <input id="peopleInput" name="people" type="number" min="1" value="1" required />
+          </label>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="submit" class="primary-button">Guardar reserva</button>
+          <button type="button" id="deleteBookingButton" class="danger-button hidden">Eliminar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
