@@ -2,13 +2,15 @@ import os
 import sqlite3
 from datetime import date
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, "bookings.db")
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "5000"))
+BOOKING_USERNAME = os.environ.get("BOOKING_USERNAME")
+BOOKING_PASSWORD = os.environ.get("BOOKING_PASSWORD")
 
 SHIFT_OPTIONS = ["morning", "afternoon"]
 SLOT_OPTIONS = ["bbp-1", "bbp-2", "bbm-1", "bbm-2", "bbg-1", "bbg-2"]
@@ -20,12 +22,57 @@ SLOT_LABELS = {
     "bbg-1": "bbg 1",
     "bbg-2": "bbg 2",
 }
+AFTERNOON_START = "18:00"
+MORNING_START = "05:00"
+MORNING_END = "17:55"
+AFTERNOON_END = "23:55"
+SHIFT_TIME_ERROR = "A partir de las 18:00 la barbacoa pertenece al turno de tarde. Las horas anteriores pertenecen al turno de mañana."
+TIME_FORMAT_ERROR = "La hora debe estar entre las 05:00 y las 23:55, en intervalos de 5 minutos."
+
+
+@app.before_request
+def require_booking_credentials():
+    if not BOOKING_USERNAME or not BOOKING_PASSWORD:
+        return None
+
+    credentials = request.authorization
+    if credentials and credentials.username == BOOKING_USERNAME and credentials.password == BOOKING_PASSWORD:
+        return None
+
+    return Response(
+        "Authentication required",
+        401,
+        {"WWW-Authenticate": 'Basic realm="BBQ Bookings"'},
+    )
 
 
 def get_db():
     db = sqlite3.connect(DATABASE)
     db.row_factory = sqlite3.Row
     return db
+
+
+def validate_shift_time(shift, time_value):
+    try:
+        hour, minute = (int(part) for part in time_value.split(":", 1))
+    except (AttributeError, TypeError, ValueError):
+        return TIME_FORMAT_ERROR
+
+    if (
+        len(time_value) != 5
+        or time_value[2] != ":"
+        or not 0 <= hour <= 23
+        or not 0 <= minute <= 59
+        or minute % 5 != 0
+        or time_value < MORNING_START
+        or time_value > AFTERNOON_END
+    ):
+        return TIME_FORMAT_ERROR
+    if shift == "afternoon" and time_value < AFTERNOON_START:
+        return SHIFT_TIME_ERROR
+    if shift == "morning" and time_value >= AFTERNOON_START:
+        return SHIFT_TIME_ERROR
+    return None
 
 
 def init_db():
@@ -99,6 +146,9 @@ def create_booking():
         return jsonify({"error": "La posición no es válida."}), 400
     if not time_value:
         return jsonify({"error": "La hora es obligatoria."}), 400
+    shift_time_error = validate_shift_time(shift, time_value)
+    if shift_time_error:
+        return jsonify({"error": shift_time_error}), 400
 
     try:
         people = int(people_value)
@@ -126,7 +176,7 @@ def update_booking(booking_id):
     existing = db.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
 
     if existing is None:
-        return jsonify({"error": "Booking not found."}), 404
+        return jsonify({"error": "No se encontró la reserva."}), 404
 
     name = (payload.get("name", existing["name"]) or "").strip()
     date_value = (payload.get("date", existing["date"]) or "").strip()
@@ -143,6 +193,9 @@ def update_booking(booking_id):
         return jsonify({"error": "La posición no es válida."}), 400
     if not time_value:
         return jsonify({"error": "La hora es obligatoria."}), 400
+    shift_time_error = validate_shift_time(shift, time_value)
+    if shift_time_error:
+        return jsonify({"error": shift_time_error}), 400
 
     try:
         people = int(people_value)

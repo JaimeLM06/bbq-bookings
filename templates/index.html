@@ -21,6 +21,11 @@
         <input id="bookingDate" type="date" />
       </section>
 
+      <div id="shiftSelection" class="shift-selection" aria-label="Seleccionar turno">
+        <button type="button" class="shift-choice active" data-shift="morning">Mañana</button>
+        <button type="button" class="shift-choice" data-shift="afternoon">Tarde</button>
+      </div>
+
       <main id="schedule" class="schedule" aria-live="polite"></main>
     </div>
 
@@ -64,7 +69,11 @@
 
           <label>
             <span>Hora</span>
-            <select id="timeInput" name="time" required></select>
+            <div class="time-picker" aria-label="Seleccionar hora">
+              <select id="hourInput" name="hour" aria-label="Hora" required></select>
+              <span>:</span>
+              <select id="minuteInput" name="minute" aria-label="Minutos" required></select>
+            </div>
           </label>
 
           <label>

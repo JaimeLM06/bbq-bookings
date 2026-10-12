@@ -1,0 +1,4 @@
+# Replace this with a domain or dynamic-DNS hostname that points to your server.
+your-domain.example {
+    reverse_proxy 127.0.0.1:5000
+}

@@ -12,38 +12,64 @@ const shiftLabels = {
   morning: "Mañana",
   afternoon: "Tarde",
 };
-const timeOptions = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
-  "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
-  "21:00", "21:30"
-];
+const afternoonStart = "18:00";
+const morningStart = "05:00";
+const morningEnd = "17:55";
+const afternoonEnd = "23:55";
+const shiftTimeError = "A partir de las 18:00 la barbacoa pertenece al turno de tarde. Las horas anteriores pertenecen al turno de mañana.";
 
 const scheduleEl = document.getElementById("schedule");
 const dateInput = document.getElementById("bookingDate");
+const shiftSelection = document.getElementById("shiftSelection");
 const newBookingButton = document.getElementById("newBookingButton");
 const bookingDialog = document.getElementById("bookingDialog");
 const bookingForm = document.getElementById("bookingForm");
 const closeDialogButton = document.getElementById("closeDialogButton");
 const deleteBookingButton = document.getElementById("deleteBookingButton");
 const dialogTitle = document.getElementById("dialogTitle");
-const timeInput = document.getElementById("timeInput");
+const hourInput = document.getElementById("hourInput");
+const minuteInput = document.getElementById("minuteInput");
+const shiftInput = document.getElementById("shiftInput");
 
 const formState = {
   editingId: null,
 };
+const appState = {
+  activeShift: "morning",
+};
 
-function populateTimeOptions(selectedTime = "12:00") {
-  timeInput.innerHTML = timeOptions
-    .map((time) => `<option value="${time}">${time}</option>`)
-    .join("");
-  timeInput.value = timeOptions.includes(selectedTime) ? selectedTime : "12:00";
+function configureTimePicker(selectedTime = "12:00", shift = shiftInput.value) {
+  const startTime = shift === "afternoon" ? afternoonStart : morningStart;
+  const endTime = shift === "afternoon" ? afternoonEnd : morningEnd;
+  const startHour = Number(startTime.slice(0, 2));
+  const endHour = Number(endTime.slice(0, 2));
+  const [selectedHour, selectedMinute] = selectedTime.split(":");
+  const isInRange = selectedTime >= startTime && selectedTime <= endTime
+    && Number(selectedMinute) % 5 === 0;
+  const defaultTime = shift === "afternoon" ? afternoonStart : "12:00";
+  const [defaultHour, defaultMinute] = isInRange
+    ? [selectedHour, selectedMinute]
+    : defaultTime.split(":");
+
+  hourInput.innerHTML = Array.from({ length: endHour - startHour + 1 }, (_, index) => {
+    const hour = String(startHour + index).padStart(2, "0");
+    return `<option value="${hour}">${hour}</option>`;
+  }).join("");
+  minuteInput.innerHTML = Array.from({ length: 12 }, (_, index) => {
+    const minute = String(index * 5).padStart(2, "0");
+    return `<option value="${minute}">${minute}</option>`;
+  }).join("");
+
+  hourInput.value = defaultHour;
+  minuteInput.value = defaultMinute;
 }
 
 function todayIso() {
   const now = new Date();
-  return now.toISOString().slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function setDate(dateValue) {
@@ -72,7 +98,7 @@ function closeDialog() {
   deleteBookingButton.classList.add("hidden");
   dialogTitle.textContent = "Nueva reserva";
   document.getElementById("peopleInput").value = 1;
-  populateTimeOptions("12:00");
+  configureTimePicker("12:00", "morning");
 }
 
 function openCreateDialog(dateValue, shiftValue, slotValue) {
@@ -82,7 +108,7 @@ function openCreateDialog(dateValue, shiftValue, slotValue) {
   document.getElementById("shiftInput").value = shiftValue || "morning";
   document.getElementById("slotInput").value = slotValue || "bbp-1";
   document.getElementById("peopleInput").value = 1;
-  populateTimeOptions(shiftValue === "afternoon" ? "17:00" : "10:00");
+  configureTimePicker(shiftValue === "afternoon" ? "18:00" : "10:00", shiftValue || "morning");
   deleteBookingButton.classList.add("hidden");
   dialogTitle.textContent = "Nueva reserva";
   showDialog();
@@ -94,7 +120,7 @@ function openEditDialog(booking) {
   document.getElementById("dateInput").value = booking.date;
   document.getElementById("shiftInput").value = booking.shift;
   document.getElementById("slotInput").value = booking.slot;
-  populateTimeOptions(booking.time);
+  configureTimePicker(booking.time, booking.shift);
   document.getElementById("peopleInput").value = booking.people;
   deleteBookingButton.classList.remove("hidden");
   dialogTitle.textContent = "Editar reserva";
@@ -109,14 +135,35 @@ async function fetchBookings(dateValue) {
   return response.json();
 }
 
+function updateShiftButtons() {
+  document.querySelectorAll(".shift-choice").forEach((button) => {
+    const isActive = button.dataset.shift === appState.activeShift;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function setActiveShift(shift) {
+  if (!shifts.includes(shift)) {
+    return;
+  }
+
+  appState.activeShift = shift;
+  updateShiftButtons();
+  loadBookingsForSelectedDate();
+}
+
 function renderSchedule(bookings) {
+  const activeShift = appState.activeShift;
   const bookingMap = new Map();
   for (const booking of bookings) {
-    bookingMap.set(`${booking.shift}-${booking.slot}`, booking);
+    if (booking.shift === activeShift) {
+      bookingMap.set(`${booking.shift}-${booking.slot}`, booking);
+    }
   }
 
   const selectedDate = dateInput.value;
-  const html = shifts
+  const html = [activeShift]
     .map((shift) => {
       const rows = slotOrder
         .map((slot) => {
@@ -126,7 +173,7 @@ function renderSchedule(bookings) {
               <div class="slot-row">
                 <div class="slot-name">${slotLabels[slot]}</div>
                 <div class="slot-booking">
-                  <div class="empty-slot">Libre</div>
+                  <div class="empty-slot free-slot">Libre</div>
                   <div class="slot-actions">
                     <button class="secondary-button" data-create="${shift}|${slot}|${selectedDate}">Añadir</button>
                   </div>
@@ -139,7 +186,7 @@ function renderSchedule(bookings) {
             <div class="slot-row">
               <div class="slot-name">${slotLabels[slot]}</div>
               <div class="slot-booking">
-                <div class="booking-card">
+                <div class="booking-card filled-slot">
                   <strong>${escapeHtml(booking.name)}</strong>
                   <div class="booking-meta">${escapeHtml(booking.time)} · ${escapeHtml(String(booking.people))} personas</div>
                 </div>
@@ -195,12 +242,33 @@ async function loadBookingsForSelectedDate() {
 
 async function saveBooking(event) {
   event.preventDefault();
+  const shift = document.getElementById("shiftInput").value;
+  const time = `${hourInput.value}:${minuteInput.value}`;
+  const isInvalidTime = !/^\d{2}:\d{2}$/.test(time)
+    || Number(time.slice(3)) % 5 !== 0
+    || time < morningStart
+    || time > afternoonEnd
+    || (shift === "morning" && time > morningEnd)
+    || (shift === "afternoon" && time < afternoonStart);
+  const isInvalidShiftTime = (shift === "afternoon" && time < afternoonStart)
+    || (shift === "morning" && time >= afternoonStart);
+
+  if (isInvalidTime) {
+    alert("La hora debe estar entre las 05:00 y las 23:55, en intervalos de 5 minutos.");
+    return;
+  }
+
+  if (isInvalidShiftTime) {
+    alert(shiftTimeError);
+    return;
+  }
+
   const payload = {
     name: document.getElementById("nameInput").value,
     date: document.getElementById("dateInput").value,
-    shift: document.getElementById("shiftInput").value,
+    shift,
     slot: document.getElementById("slotInput").value,
-    time: document.getElementById("timeInput").value,
+    time,
     people: Number(document.getElementById("peopleInput").value),
   };
 
@@ -251,14 +319,24 @@ async function deleteBooking() {
 
 newBookingButton.addEventListener("click", () => {
   const selectedDate = dateInput.value || todayIso();
-  openCreateDialog(selectedDate, "morning", "bbp-1");
+  openCreateDialog(selectedDate, appState.activeShift, "bbp-1");
 });
 
 closeDialogButton.addEventListener("click", closeDialog);
 bookingForm.addEventListener("submit", saveBooking);
 deleteBookingButton.addEventListener("click", deleteBooking);
 dateInput.addEventListener("change", loadBookingsForSelectedDate);
+shiftSelection.addEventListener("click", (event) => {
+  const button = event.target.closest(".shift-choice");
+  if (!button) {
+    return;
+  }
 
-populateTimeOptions("12:00");
+  setActiveShift(button.dataset.shift);
+});
+shiftInput.addEventListener("change", () => configureTimePicker(`${hourInput.value}:${minuteInput.value}`, shiftInput.value));
+
+updateShiftButtons();
+configureTimePicker("12:00", "morning");
 setDate(todayIso());
 loadBookingsForSelectedDate();
